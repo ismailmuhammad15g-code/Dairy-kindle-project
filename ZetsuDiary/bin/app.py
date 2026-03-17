@@ -29,6 +29,7 @@ BTN_FG   = "#FFFFFF"       # white button text
 
 # Fonts — large and easy to read on an E-ink screen
 FONT_TEXT   = ("DejaVu Sans", 18)
+FONT_ENTRY  = ("DejaVu Sans", 20)
 FONT_BUTTON = ("DejaVu Sans", 20, "bold")
 FONT_TITLE  = ("DejaVu Sans", 24, "bold")
 FONT_STATUS = ("DejaVu Sans", 14)
@@ -76,9 +77,39 @@ class ZetsuDiaryApp:
         separator_top = tk.Frame(self.root, bg=FG_COLOR, height=2)
         separator_top.pack(fill=tk.X, side=tk.TOP)
 
+        # --- Title entry -------------------------------------------------
+        title_row = tk.Frame(self.root, bg=BG_COLOR)
+        title_row.pack(fill=tk.X, padx=20, pady=(12, 4))
+
+        title_label = tk.Label(
+            title_row,
+            text="Title:",
+            font=FONT_ENTRY,
+            bg=BG_COLOR,
+            fg=FG_COLOR,
+        )
+        title_label.pack(side=tk.LEFT, padx=(0, 10))
+
+        self.title_entry = tk.Entry(
+            title_row,
+            font=FONT_ENTRY,
+            bg=BG_COLOR,
+            fg=FG_COLOR,
+            insertbackground=FG_COLOR,
+            relief=tk.SOLID,
+            bd=2,
+            selectbackground=FG_COLOR,
+            selectforeground=BG_COLOR,
+        )
+        self.title_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        # Thin separator between title row and text area
+        separator_mid = tk.Frame(self.root, bg=FG_COLOR, height=1)
+        separator_mid.pack(fill=tk.X, padx=20, pady=(4, 0))
+
         # --- Text area ---------------------------------------------------
         text_frame = tk.Frame(self.root, bg=BG_COLOR)
-        text_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(15, 5))
+        text_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(10, 5))
 
         self.text_widget = tk.Text(
             text_frame,
@@ -171,11 +202,24 @@ class ZetsuDiaryApp:
     # Actions
     # ------------------------------------------------------------------
     def _save_entry(self) -> None:
-        """Save the current text as a timestamped .txt file."""
+        """Save the current text as a titled, timestamped .txt file."""
         content = self.text_widget.get("1.0", tk.END).strip()
         if not content:
             self.status_var.set("⚠  Nothing to save — please write something first.")
             return
+
+        # Read title; fall back to "Untitled" when the field is empty
+        raw_title = self.title_entry.get().strip()
+        display_title = raw_title if raw_title else "Untitled"
+
+        # Sanitise title for use in a filename:
+        #   replace spaces with underscores, remove characters that are
+        #   unsafe on FAT32 (the Kindle's filesystem).
+        _unsafe = r'\/:*?"<>|'
+        safe_title = display_title.replace(" ", "_")
+        safe_title = "".join(ch for ch in safe_title if ch not in _unsafe)
+        if not safe_title:
+            safe_title = "Untitled"
 
         # Ensure the notes directory exists
         try:
@@ -184,28 +228,30 @@ class ZetsuDiaryApp:
             self.status_var.set(f"✗  Cannot create notes folder: {exc}")
             return
 
-        # Build a timestamped filename
+        # Build filename: Zetsu_[Title]_[YYYY-MM-DD].txt
         now = datetime.datetime.now()
-        filename = now.strftime("Zetsu_%Y-%m-%d_%H-%M-%S.txt")
+        filename = f"Zetsu_{safe_title}_{now.strftime('%Y-%m-%d')}.txt"
         filepath = os.path.join(NOTES_DIR, filename)
 
-        # Write the file
+        # Write the file: title → date/time → separator → body
         try:
             with open(filepath, "w", encoding="utf-8") as note_file:
-                # Add a human-readable date header inside the file
-                header = f"Zetsu Diary Entry\nDate: {now.strftime('%A, %d %B %Y  %H:%M:%S')}\n"
-                header += "-" * 40 + "\n\n"
-                note_file.write(header + content + "\n")
+                note_file.write(f"{display_title}\n")
+                note_file.write(f"Date: {now.strftime('%A, %d %B %Y  %H:%M:%S')}\n")
+                note_file.write("-" * 40 + "\n\n")
+                note_file.write(content + "\n")
         except OSError as exc:
             self.status_var.set(f"✗  Save failed: {exc}")
             return
 
         self.status_var.set(f"✔  Saved → {filename}")
-        # Clear the text area after a successful save
+        # Clear both the title field and the text area after a successful save
+        self.title_entry.delete(0, tk.END)
         self.text_widget.delete("1.0", tk.END)
 
     def _clear_text(self) -> None:
-        """Clear the text area."""
+        """Clear the title field and the text area."""
+        self.title_entry.delete(0, tk.END)
         self.text_widget.delete("1.0", tk.END)
         self.status_var.set("Text cleared.")
 
