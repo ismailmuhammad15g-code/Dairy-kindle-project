@@ -11,9 +11,9 @@ Notes are saved as timestamped .txt files in /mnt/us/documents/Zetsu_Notes/.
 """
 
 import tkinter as tk
-from tkinter import messagebox
-import os
 import datetime
+import os
+import re
 
 
 # ---------------------------------------------------------------------------
@@ -194,9 +194,93 @@ class ZetsuDiaryApp:
             bd=2,
             padx=30,
             pady=12,
-            command=self.root.destroy,
+            command=lambda: self._ask_confirm("Are you sure?", self.root.destroy),
         )
         exit_button.pack(side=tk.RIGHT)
+
+    # ------------------------------------------------------------------
+    # Confirmation dialog
+    # ------------------------------------------------------------------
+    def _ask_confirm(self, question: str, on_yes) -> None:
+        """Show a custom modal confirmation dialog.
+
+        Avoids tkinter.messagebox which can be unreliable on Kindle/X11.
+        The dialog is centered on screen, has a thick black border on a
+        white background, and presents Yes / No buttons.
+        """
+        dialog = tk.Toplevel(self.root)
+        dialog.configure(bg=BG_COLOR, bd=6, relief=tk.SOLID)
+        dialog.resizable(False, False)
+        # Keep it on top of the main window
+        dialog.transient(self.root)
+
+        # Question label
+        tk.Label(
+            dialog,
+            text=question,
+            font=FONT_ENTRY,      # DejaVu Sans 20 pt
+            bg=BG_COLOR,
+            fg=FG_COLOR,
+            padx=40,
+            pady=30,
+            wraplength=500,
+        ).pack()
+
+        # Thin separator
+        tk.Frame(dialog, bg=FG_COLOR, height=2).pack(fill=tk.X)
+
+        # Button row
+        btn_frame = tk.Frame(dialog, bg=BG_COLOR, pady=20)
+        btn_frame.pack()
+
+        def _yes() -> None:
+            dialog.destroy()
+            on_yes()
+
+        def _no() -> None:
+            dialog.destroy()
+
+        tk.Button(
+            btn_frame,
+            text="  Yes  ",
+            font=FONT_BUTTON,
+            bg=BTN_BG,
+            fg=BTN_FG,
+            activebackground=FG_COLOR,
+            activeforeground=BG_COLOR,
+            relief=tk.SOLID,
+            bd=2,
+            padx=20,
+            pady=10,
+            command=_yes,
+        ).pack(side=tk.LEFT, padx=20)
+
+        tk.Button(
+            btn_frame,
+            text="  No  ",
+            font=FONT_BUTTON,
+            bg=BG_COLOR,
+            fg=FG_COLOR,
+            activebackground=FG_COLOR,
+            activeforeground=BG_COLOR,
+            relief=tk.SOLID,
+            bd=2,
+            padx=20,
+            pady=10,
+            command=_no,
+        ).pack(side=tk.LEFT, padx=20)
+
+        # Centre dialog on screen after widgets are measured
+        dialog.update_idletasks()
+        sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
+        dw = dialog.winfo_reqwidth()
+        dh = dialog.winfo_reqheight()
+        dialog.geometry(f"+{(sw - dw) // 2}+{(sh - dh) // 2}")
+
+        # Make modal: grab all events until the dialog is closed
+        dialog.grab_set()
+        self.root.wait_window(dialog)
 
     # ------------------------------------------------------------------
     # Actions
@@ -250,7 +334,11 @@ class ZetsuDiaryApp:
         self.text_widget.delete("1.0", tk.END)
 
     def _clear_text(self) -> None:
-        """Clear the title field and the text area."""
+        """Ask for confirmation, then clear the title field and text area."""
+        self._ask_confirm("Are you sure?", self._do_clear)
+
+    def _do_clear(self) -> None:
+        """Perform the actual clear after the user has confirmed."""
         self.title_entry.delete(0, tk.END)
         self.text_widget.delete("1.0", tk.END)
         self.status_var.set("Text cleared.")
