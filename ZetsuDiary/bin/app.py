@@ -1,0 +1,223 @@
+#!/usr/bin/env python3
+"""
+Zetsu Diary - A native diary application for Jailbroken Amazon Kindle devices.
+
+Designed for E-ink displays:
+  - High-contrast black and white interface only.
+  - Large, readable fonts.
+  - No animations or visual effects.
+
+Notes are saved as timestamped .txt files in /mnt/us/documents/Zetsu_Notes/.
+"""
+
+import tkinter as tk
+from tkinter import messagebox
+import os
+import datetime
+
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+NOTES_DIR = "/mnt/us/documents/Zetsu_Notes"
+
+# Colors — strict black/white for E-ink display compatibility
+BG_COLOR = "#FFFFFF"       # white background
+FG_COLOR = "#000000"       # black text
+BTN_BG   = "#000000"       # black button background
+BTN_FG   = "#FFFFFF"       # white button text
+
+# Fonts — large and easy to read on an E-ink screen
+FONT_TEXT   = ("DejaVu Sans", 18)
+FONT_BUTTON = ("DejaVu Sans", 20, "bold")
+FONT_TITLE  = ("DejaVu Sans", 24, "bold")
+FONT_STATUS = ("DejaVu Sans", 14)
+
+
+# ---------------------------------------------------------------------------
+# Application
+# ---------------------------------------------------------------------------
+class ZetsuDiaryApp:
+    """Main application window for Zetsu Diary."""
+
+    def __init__(self, root: tk.Tk) -> None:
+        self.root = root
+        self._configure_root()
+        self._build_ui()
+
+    # ------------------------------------------------------------------
+    # Setup
+    # ------------------------------------------------------------------
+    def _configure_root(self) -> None:
+        """Configure the main window for E-ink display."""
+        self.root.title("Zetsu Diary")
+        self.root.configure(bg=BG_COLOR)
+        # Full-screen is ideal for Kindle; fall back gracefully on desktop.
+        self.root.attributes("-fullscreen", True)
+        # Disable window decorations / animations
+        self.root.resizable(False, False)
+        # Bind Escape key to exit (useful for testing on desktop)
+        self.root.bind("<Escape>", lambda _event: self.root.destroy())
+
+    def _build_ui(self) -> None:
+        """Build all UI widgets."""
+        # --- Title bar ---------------------------------------------------
+        title_label = tk.Label(
+            self.root,
+            text="✏  Zetsu Diary",
+            font=FONT_TITLE,
+            bg=BG_COLOR,
+            fg=FG_COLOR,
+            pady=10,
+        )
+        title_label.pack(fill=tk.X, side=tk.TOP)
+
+        # Horizontal separator
+        separator_top = tk.Frame(self.root, bg=FG_COLOR, height=2)
+        separator_top.pack(fill=tk.X, side=tk.TOP)
+
+        # --- Text area ---------------------------------------------------
+        text_frame = tk.Frame(self.root, bg=BG_COLOR)
+        text_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(15, 5))
+
+        self.text_widget = tk.Text(
+            text_frame,
+            font=FONT_TEXT,
+            bg=BG_COLOR,
+            fg=FG_COLOR,
+            insertbackground=FG_COLOR,   # cursor colour
+            relief=tk.SOLID,
+            bd=2,
+            wrap=tk.WORD,
+            undo=True,
+            # Disable all cursor/selection highlights that could cause grey
+            selectbackground=FG_COLOR,
+            selectforeground=BG_COLOR,
+        )
+        self.text_widget.pack(fill=tk.BOTH, expand=True)
+        self.text_widget.focus_set()
+
+        # --- Bottom separator -------------------------------------------
+        separator_bottom = tk.Frame(self.root, bg=FG_COLOR, height=2)
+        separator_bottom.pack(fill=tk.X, side=tk.BOTTOM)
+
+        # --- Status bar --------------------------------------------------
+        self.status_var = tk.StringVar(value="Ready — write your diary entry above.")
+        status_bar = tk.Label(
+            self.root,
+            textvariable=self.status_var,
+            font=FONT_STATUS,
+            bg=BG_COLOR,
+            fg=FG_COLOR,
+            anchor=tk.W,
+            padx=20,
+            pady=4,
+        )
+        status_bar.pack(fill=tk.X, side=tk.BOTTOM)
+
+        # --- Button row --------------------------------------------------
+        button_frame = tk.Frame(self.root, bg=BG_COLOR, pady=10)
+        button_frame.pack(fill=tk.X, side=tk.BOTTOM, padx=20)
+
+        save_button = tk.Button(
+            button_frame,
+            text="💾  Save Entry",
+            font=FONT_BUTTON,
+            bg=BTN_BG,
+            fg=BTN_FG,
+            activebackground=FG_COLOR,
+            activeforeground=BG_COLOR,
+            relief=tk.SOLID,
+            bd=2,
+            padx=30,
+            pady=12,
+            command=self._save_entry,
+        )
+        save_button.pack(side=tk.LEFT, padx=(0, 10))
+
+        clear_button = tk.Button(
+            button_frame,
+            text="🗑  Clear",
+            font=FONT_BUTTON,
+            bg=BG_COLOR,
+            fg=FG_COLOR,
+            activebackground=FG_COLOR,
+            activeforeground=BG_COLOR,
+            relief=tk.SOLID,
+            bd=2,
+            padx=30,
+            pady=12,
+            command=self._clear_text,
+        )
+        clear_button.pack(side=tk.LEFT, padx=(0, 10))
+
+        exit_button = tk.Button(
+            button_frame,
+            text="✖  Exit",
+            font=FONT_BUTTON,
+            bg=BG_COLOR,
+            fg=FG_COLOR,
+            activebackground=FG_COLOR,
+            activeforeground=BG_COLOR,
+            relief=tk.SOLID,
+            bd=2,
+            padx=30,
+            pady=12,
+            command=self.root.destroy,
+        )
+        exit_button.pack(side=tk.RIGHT)
+
+    # ------------------------------------------------------------------
+    # Actions
+    # ------------------------------------------------------------------
+    def _save_entry(self) -> None:
+        """Save the current text as a timestamped .txt file."""
+        content = self.text_widget.get("1.0", tk.END).strip()
+        if not content:
+            self.status_var.set("⚠  Nothing to save — please write something first.")
+            return
+
+        # Ensure the notes directory exists
+        try:
+            os.makedirs(NOTES_DIR, exist_ok=True)
+        except OSError as exc:
+            self.status_var.set(f"✗  Cannot create notes folder: {exc}")
+            return
+
+        # Build a timestamped filename
+        now = datetime.datetime.now()
+        filename = now.strftime("Zetsu_%Y-%m-%d_%H-%M-%S.txt")
+        filepath = os.path.join(NOTES_DIR, filename)
+
+        # Write the file
+        try:
+            with open(filepath, "w", encoding="utf-8") as note_file:
+                # Add a human-readable date header inside the file
+                header = f"Zetsu Diary Entry\nDate: {now.strftime('%A, %d %B %Y  %H:%M:%S')}\n"
+                header += "-" * 40 + "\n\n"
+                note_file.write(header + content + "\n")
+        except OSError as exc:
+            self.status_var.set(f"✗  Save failed: {exc}")
+            return
+
+        self.status_var.set(f"✔  Saved → {filename}")
+        # Clear the text area after a successful save
+        self.text_widget.delete("1.0", tk.END)
+
+    def _clear_text(self) -> None:
+        """Clear the text area."""
+        self.text_widget.delete("1.0", tk.END)
+        self.status_var.set("Text cleared.")
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+def main() -> None:
+    root = tk.Tk()
+    ZetsuDiaryApp(root)
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    main()
