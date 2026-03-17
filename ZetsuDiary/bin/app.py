@@ -132,6 +132,18 @@ class ZetsuDiaryApp:
         separator_bottom = tk.Frame(self.root, bg=FG_COLOR, height=2)
         separator_bottom.pack(fill=tk.X, side=tk.BOTTOM)
 
+        # --- Info bar (version stamp) ------------------------------------
+        info_bar = tk.Label(
+            self.root,
+            text="Zetsuserv Core v1.0",
+            font=FONT_STATUS,
+            bg=BG_COLOR,
+            fg=FG_COLOR,
+            anchor=tk.CENTER,
+            pady=2,
+        )
+        info_bar.pack(fill=tk.X, side=tk.BOTTOM)
+
         # --- Status bar --------------------------------------------------
         self.status_var = tk.StringVar(value="Ready — write your diary entry above.")
         status_bar = tk.Label(
@@ -348,9 +360,14 @@ class ZetsuDiaryApp:
 # Entry point
 # ---------------------------------------------------------------------------
 def main() -> None:
-    root = tk.Tk()
-    ZetsuDiaryApp(root)
-    root.mainloop()
+    try:
+        root = tk.Tk()
+        ZetsuDiaryApp(root)
+        root.mainloop()
+    except Exception as exc:
+        import traceback
+        print(f"[ZetsuDiary] Fatal GUI error: {exc}", flush=True)
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
