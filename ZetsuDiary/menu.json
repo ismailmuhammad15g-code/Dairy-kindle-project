@@ -1,9 +1,1 @@
-{
-    "items": [
-        {
-            "name": "Zetsu Diary",
-            "priority": 1,
-            "action": "bin/zetsu.sh"
-        }
-    ]
-}
+{"items":[{"name":"Zetsu Diary","priority":1,"action":"bin/zetsu.sh"}]}
